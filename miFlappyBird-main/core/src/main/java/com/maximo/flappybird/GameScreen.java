@@ -3,6 +3,7 @@ package com.maximo.flappybird;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -18,12 +19,18 @@ public class GameScreen implements Screen, NetworkListener {
     private Texture otherBird;
     private float birdY = 300;
     private float otherPlayerY = 300;
+    private float lastSentY = 0;
+    private OrthographicCamera camera;
+
+
 
     private float velocity = 0;
     private float gravity = 0.5f;
 
     private boolean gameStarted = false;
     private int estadoJuego = 0; // 0 = esperando, 1 = jugando, 2 = game over
+    private Texture background;
+
 
     private GameClient client;
     private BitmapFont font;
@@ -33,8 +40,13 @@ public class GameScreen implements Screen, NetworkListener {
 
         bird = new Texture("bird1.png");
         otherBird = new Texture("bird1.png");
+        background = new Texture("bg.png");
+
 
         font = new BitmapFont();
+        camera = new OrthographicCamera();
+        camera.setToOrtho(false, 800, 480);
+
 
         // 🔌 Conexión al servidor
         client = new GameClient("localhost", 9999, this);
@@ -42,10 +54,15 @@ public class GameScreen implements Screen, NetworkListener {
 
     @Override
     public void render(float delta) {
-
+        Gdx.gl.glClearColor(0, 0, 0, 1);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
+        camera.update(); // 👈 VA ACÁ
+        game.batch.setProjectionMatrix(camera.combined); // 👈 Y ESTO TAMBIÉN ACÁ
+
         game.batch.begin();
+
+        game.batch.draw(background, 0, 0);
 
         // 🔵 PANTALLA DE ESPERA
         if (!gameStarted) {
@@ -75,7 +92,11 @@ public class GameScreen implements Screen, NetworkListener {
             birdY -= velocity;
 
             // Enviar posición cada frame
-            client.send("PLAYER:" + birdY); // 🔥 SINCRONIZA POSICIÓN
+            if (Math.abs(birdY - lastSentY) > 2) {
+                client.send("PLAYER:" + birdY);
+                lastSentY = birdY;
+            }
+            // 🔥 SINCRONIZA POSICIÓN
         }
 
         // Dibujar jugador local
@@ -101,8 +122,15 @@ public class GameScreen implements Screen, NetworkListener {
         }
 
         if (MessageParser.isPlayerPosition(message)) {
-            otherPlayerY = MessageParser.getPlayerY(message);
+            try {
+                otherPlayerY = MessageParser.getPlayerY(message);
+            } catch (Exception e) {
+                System.out.println("Mensaje inválido: " + message);
+            }
+
         }
+        System.out.println("Mensaje recibido: " + message);
+
     }
 
     @Override
