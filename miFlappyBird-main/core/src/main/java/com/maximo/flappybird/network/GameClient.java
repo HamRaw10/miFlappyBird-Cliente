@@ -1,49 +1,72 @@
 package com.maximo.flappybird.network;
 
-import java.io.*;
-import java.net.Socket;
+import java.net.*;
 
 public class GameClient {
 
-    private Socket socket;
-    private BufferedReader in;
-    private PrintWriter out;
+    private DatagramSocket socket;
+    private InetAddress serverAddress;
+    private int serverPort;
 
     private NetworkListener listener;
 
     public GameClient(String host, int port, NetworkListener listener) {
         this.listener = listener;
+        this.serverPort = port;
 
         try {
-            socket = new Socket(host, port);
-
-            in = new BufferedReader(
-                new InputStreamReader(socket.getInputStream()));
-
-            out = new PrintWriter(
-                socket.getOutputStream(), true);
+            socket = new DatagramSocket();
+            serverAddress = InetAddress.getByName(host);
 
             new Thread(this::listen).start();
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     private void listen() {
         try {
-            String message;
+            byte[] buffer = new byte[1024];
 
-            while ((message = in.readLine()) != null) {
+            while (true) {
+
+                DatagramPacket packet =
+                    new DatagramPacket(buffer, buffer.length);
+
+                socket.receive(packet);
+
+                String message = new String(
+                    packet.getData(),
+                    0,
+                    packet.getLength()
+                );
+
                 listener.onMessageReceived(message);
             }
 
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
     public void send(String message) {
-        out.println(message);
+        try {
+
+            byte[] data = message.getBytes();
+
+            DatagramPacket packet =
+                new DatagramPacket(
+                    data,
+                    data.length,
+                    serverAddress,
+                    serverPort
+                );
+
+            socket.send(packet);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

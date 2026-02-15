@@ -54,7 +54,8 @@ public class GameScreen implements Screen, NetworkListener {
 
 
         // 🔌 Conexión al servidor
-        client = new GameClient("localhost", 9999, this);
+        client = new GameClient("localhost", 5000, this);
+
     }
 
     @Override
