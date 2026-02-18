@@ -20,15 +20,20 @@ public class GameClient {
 
             new Thread(this::listen).start();
 
+
+            send("HELLO");
+
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
+
     private void listen() {
         try {
             byte[] buffer = new byte[1024];
-
+            //El cliente espera paquetes del server, y al recibirlos los traduce y envia
+            // al NetworkListener para que el juego procese esos paquetes*/
             while (true) {
 
                 DatagramPacket packet =

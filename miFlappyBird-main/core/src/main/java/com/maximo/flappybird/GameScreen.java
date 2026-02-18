@@ -22,6 +22,8 @@ public class GameScreen implements Screen, NetworkListener {
     private float otherPlayerY = 300;
     private float lastSentY = 0;
     private OrthographicCamera camera;
+    private boolean playerAssigned = false;
+
 
 
 
@@ -53,7 +55,7 @@ public class GameScreen implements Screen, NetworkListener {
         camera.setToOrtho(false, 800, 480);
 
 
-        // 🔌 Conexión al servidor
+        //Aca se conecta el cliente al servidor, donde envia el host, el puerto y el listener
         client = new GameClient("localhost", 5000, this);
 
     }
@@ -91,7 +93,7 @@ public class GameScreen implements Screen, NetworkListener {
 
             if (Gdx.input.justTouched()) {
                 velocity = -10;
-                client.send("JUMP");
+
             }
 
             velocity += gravity;
@@ -102,7 +104,7 @@ public class GameScreen implements Screen, NetworkListener {
             if (estadoJuego == 1) {
 
                 String alive = (estadoJuego == 2) ? "0" : "1";
-
+                //Se envia el estado completo del jugador en cada frame
                 String data =
                     "Y:" + (int) birdY +
                         "|ALIVE:" + alive +
@@ -143,10 +145,18 @@ Eso es sincronización centralizada.*/
 
         String[] parts = message.split("\\|");
 
-        // START
-        gameStarted = parts[0].split(":")[1].equals("1");
+        // Detectar color propio
+        if (parts[0].startsWith("YOU")) {
+            String myColor = parts[0].split(":")[1];
+            isPlayerOne = myColor.equals("BLUE");
+        }
 
-        for (int i = 1; i < parts.length; i++) {
+        // START
+        if (parts.length > 1 && parts[1].startsWith("START")) {
+            gameStarted = parts[1].split(":")[1].equals("1");
+        }
+
+        for (int i = 2; i < parts.length; i++) {
 
             if (parts[i].startsWith("P")) {
 
@@ -158,7 +168,7 @@ Eso es sincronización centralizada.*/
                 int scoreReceived = Integer.parseInt(values[2]);
                 String color = values[3];
 
-                // Si este jugador es el mismo color que yo
+                // Si este jugador es yo
                 if ((isPlayerOne && color.equals("BLUE")) ||
                     (!isPlayerOne && color.equals("RED"))) {
 
@@ -173,6 +183,7 @@ Eso es sincronización centralizada.*/
             }
         }
     }
+
 
 
     @Override
