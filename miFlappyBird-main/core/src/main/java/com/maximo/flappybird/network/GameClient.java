@@ -20,7 +20,6 @@ public class GameClient {
 
             new Thread(this::listen).start();
 
-
             send("HELLO");
 
         } catch (Exception e) {

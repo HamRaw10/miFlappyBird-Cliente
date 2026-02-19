@@ -7,9 +7,13 @@ import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.utils.Array;
 import com.maximo.flappybird.network.GameClient;
 import com.maximo.flappybird.network.NetworkListener;
 import com.maximo.flappybird.network.MessageParser;
+import com.maximo.flappybird.sprites.Tube;
+import com.badlogic.gdx.math.Rectangle;
+
 
 public class GameScreen implements Screen, NetworkListener {
 
@@ -33,6 +37,7 @@ public class GameScreen implements Screen, NetworkListener {
     private boolean gameStarted = false;
     private int estadoJuego = 0; // 0 = esperando, 1 = jugando, 2 = game over
     private Texture background;
+    private Rectangle birdBounds;
 
 
     private GameClient client;
@@ -41,6 +46,14 @@ public class GameScreen implements Screen, NetworkListener {
     private int score = 0;
     private int otherPlayerScore = 0;
 
+    private Array<Tube> tubes;
+    private static final int TUBE_COUNT = 4;
+    private static final float TUBE_SPACING = 300;
+    private static final float TUBE_SPEED = 200;
+    private boolean gane = false;
+
+
+
 
     public GameScreen(Main game) {
         this.game = game;
@@ -48,6 +61,8 @@ public class GameScreen implements Screen, NetworkListener {
         bird = new Texture("bird1.png");
         otherBird = new Texture("red-bird1.png");
         background = new Texture("bg.png");
+        tubes = new Array<>();
+
 
 
         font = new BitmapFont();
@@ -55,8 +70,16 @@ public class GameScreen implements Screen, NetworkListener {
         camera.setToOrtho(false, 800, 480);
 
 
+        birdBounds = new Rectangle(100, birdY, 50, 50);
+
+
+        for (int i = 0; i < TUBE_COUNT; i++) {
+            tubes.add(new Tube(600 + i * TUBE_SPACING));
+        }
+
+
         //Aca se conecta el cliente al servidor, donde envia el host, el puerto y el listener
-        client = new GameClient("localhost", 5000, this);
+        client = new GameClient("192.168.0.52", 5000, this);
 
     }
 
@@ -83,13 +106,74 @@ public class GameScreen implements Screen, NetworkListener {
 
         // Game Over
         if (estadoJuego == 2) {
-            font.draw(game.batch, "GAME OVER", 250, 300);
+
+            if (gane) {
+                font.draw(game.batch, "GANASTE!", 250, 300);
+            } else {
+                font.draw(game.batch, "PERDISTE!", 250, 300);
+            }
+
             game.batch.end();
             return;
         }
 
+
         // Juego activo
         if (estadoJuego == 1) {
+            for (int i = 0; i < tubes.size; i++) {
+
+                Tube tube = tubes.get(i);
+
+                // mover tubos
+                tube.getPosTopTube().x -= TUBE_SPEED * delta;
+                tube.getPosBottomTube().x -= TUBE_SPEED * delta;
+
+                tube.getBoundsTop().setPosition(
+                    tube.getPosTopTube().x,
+                    tube.getPosTopTube().y
+                );
+
+                tube.getBoundsBottom().setPosition(
+                    tube.getPosBottomTube().x,
+                    tube.getPosBottomTube().y
+                );
+
+                // dibujar
+                game.batch.draw(
+                    tube.getTexture(),
+                    tube.getPosTopTube().x,
+                    tube.getPosTopTube().y
+                );
+
+                game.batch.draw(
+                    tube.getTexture(),
+                    tube.getPosBottomTube().x,
+                    tube.getPosBottomTube().y
+                );
+
+                // reposicionar si sale de pantalla
+                if (tube.getPosTopTube().x < -tube.getTexture().getWidth()) {
+                    tube.reposition(
+                        tube.getPosTopTube().x + TUBE_COUNT * TUBE_SPACING
+                    );
+                    tube.setScored(false);
+
+                }
+                if (tube.getBoundsTop().overlaps(birdBounds) ||
+                    tube.getBoundsBottom().overlaps(birdBounds)) {
+
+                    estadoJuego = 2;
+                }
+                if (!tube.isScored() &&
+                    tube.getPosTopTube().x + tube.getTexture().getWidth() < 100) {
+
+                    score++;
+                    tube.setScored(true);
+                }
+
+
+            }
+
 
             if (Gdx.input.justTouched()) {
                 velocity = -10;
@@ -99,19 +183,23 @@ public class GameScreen implements Screen, NetworkListener {
             velocity += gravity;
             birdY -= velocity;
 
+            birdBounds.setPosition(100, birdY);
+            if (birdY <= 0) {
+                estadoJuego = 2;
+            }
+
+
+
             /*Enviamos el estado completo del jugador en cada frame para que el servidor
             tenga siempre la información actualizada*/
-            if (estadoJuego == 1) {
+            String alive = (estadoJuego == 2) ? "0" : "1";
 
-                String alive = (estadoJuego == 2) ? "0" : "1";
-                //Se envia el estado completo del jugador en cada frame
-                String data =
-                    "Y:" + (int) birdY +
-                        "|ALIVE:" + alive +
-                        "|SCORE:" + score;
+            String data =
+                (int) birdY + "," +
+                    alive + "," +
+                    score;
 
-                client.send(data);
-            }
+            client.send(data);
 
         }
 
@@ -143,46 +231,86 @@ Eso es sincronización centralizada.*/
     @Override
     public void onMessageReceived(String message) {
 
-        String[] parts = message.split("\\|");
+        Gdx.app.postRunnable(() -> {
 
-        // Detectar color propio
-        if (parts[0].startsWith("YOU")) {
-            String myColor = parts[0].split(":")[1];
-            isPlayerOne = myColor.equals("BLUE");
-        }
+            String[] parts = message.split("\\|");
 
-        // START
-        if (parts.length > 1 && parts[1].startsWith("START")) {
-            gameStarted = parts[1].split(":")[1].equals("1");
-        }
+            if (parts[0].startsWith("YOU")) {
+                String myColor = parts[0].split(":")[1];
+                isPlayerOne = myColor.equals("BLUE");
+            }
 
-        for (int i = 2; i < parts.length; i++) {
+            if (parts.length > 1 && parts[1].startsWith("START")) {
 
-            if (parts[i].startsWith("P")) {
+                boolean started = parts[1].split(":")[1].equals("1");
+                gameStarted = started;
 
-                String playerData = parts[i].split(":")[1];
-                String[] values = playerData.split(",");
-
-                int y = Integer.parseInt(values[0]);
-                boolean alive = values[1].equals("1");
-                int scoreReceived = Integer.parseInt(values[2]);
-                String color = values[3];
-
-                // Si este jugador es yo
-                if ((isPlayerOne && color.equals("BLUE")) ||
-                    (!isPlayerOne && color.equals("RED"))) {
-
-                    birdY = y;
-                    score = scoreReceived;
-                    estadoJuego = alive ? 1 : 2;
-
-                } else {
-                    otherPlayerY = y;
-                    otherPlayerScore = scoreReceived;
+                if (started && estadoJuego == 0) {
+                    estadoJuego = 1; // 🔥 ACTIVA EL JUEGO
                 }
             }
-        }
+
+            if (message.startsWith("GAMEOVER")) {
+
+                String winnerColor = message.split(":")[1];
+
+                if ((isPlayerOne && winnerColor.equals("BLUE")) ||
+                    (!isPlayerOne && winnerColor.equals("RED"))) {
+
+                    gane = true;
+
+                } else {
+
+                    gane = false;
+                }
+
+                estadoJuego = 2;
+                gameStarted = false;
+                return;
+            }
+
+            for (int i = 2; i < parts.length; i++) {
+
+                if (parts[i].startsWith("P")) {
+
+                    String playerData = parts[i].split(":")[1];
+                    String[] values = playerData.split(",");
+
+                    int y = Integer.parseInt(values[0]);
+                    boolean alive = values[1].equals("1");
+                    int scoreReceived = Integer.parseInt(values[2]);
+                    String color = values[3];
+
+                    if ((isPlayerOne && color.equals("BLUE")) ||
+                        (!isPlayerOne && color.equals("RED"))) {
+
+                        score = scoreReceived;
+
+                        if (!alive && estadoJuego != 2) {
+                            gane = false;   // 🔥 si yo muero, pierdo
+                            estadoJuego = 2;
+                            gameStarted = false;
+                        }
+                    } else {
+
+                        otherPlayerY = y;
+                        otherPlayerScore = scoreReceived;
+
+                        if (!alive && estadoJuego != 2) {
+                            gane = true;   // 🔥 si el otro muere, yo gano
+                            estadoJuego = 2;
+                            gameStarted = false;
+                        }
+
+
+
+
+                    }
+                }
+            }
+        });
     }
+
 
 
 

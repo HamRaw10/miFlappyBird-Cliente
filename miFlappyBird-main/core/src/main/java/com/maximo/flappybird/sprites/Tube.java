@@ -14,6 +14,9 @@ public class Tube {
 
     private Rectangle boundsTop;
     private Rectangle boundsBottom;
+    private boolean scored = false;
+
+
 
     public Tube(float x) {
 
@@ -81,6 +84,16 @@ public class Tube {
         boundsTop.setPosition(posTopTube.x, posTopTube.y);
         boundsBottom.setPosition(posBottomTube.x, posBottomTube.y);
     }
+
+
+    public boolean isScored() {
+        return scored;
+    }
+
+    public void setScored(boolean value) {
+        scored = value;
+    }
+
 
     public void dispose() {
         texture.dispose();
